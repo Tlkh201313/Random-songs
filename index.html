@@ -158,8 +158,24 @@
     }
 
     .art-wrap {
+      position: relative;
       width: clamp(96px, 15vw, 160px);
       aspect-ratio: 1;
+      flex-shrink: 0;
+      border-radius: 6px;
+      overflow: hidden;
+      background: rgba(0, 0, 0, 0.25);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    }
+
+    .art-wrap::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 55%);
+      pointer-events: none;
+      z-index: 2;
     }
 
     .art {
@@ -168,13 +184,45 @@
       object-fit: cover;
       border-radius: 6px;
       background: rgba(0, 0, 0, 0.25);
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    }
+
+    .art-layer {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      transition: opacity 0.14s ease;
+      z-index: 1;
+    }
+
+    .art-layer.is-visible {
+      opacity: 1;
+    }
+
+    .banner.flashing .art-layer {
+      transition-duration: 0.1s;
+    }
+
+    .banner.flashing .art-wrap:not(.has-art) {
+      animation: pulse 1.1s ease-in-out infinite;
     }
 
     .meta {
       min-width: 0;
       display: grid;
       gap: 0.3rem;
+      align-content: center;
+    }
+
+    .banner.flashing .track,
+    .banner.flashing .artist,
+    .banner.flashing .album {
+      transition: opacity 0.09s ease, transform 0.09s ease;
+    }
+
+    .banner.flashing .meta.is-ticking .track,
+    .banner.flashing .meta.is-ticking .artist {
+      opacity: 0.72;
+      transform: translateY(1px);
     }
 
     .type-label {
@@ -189,6 +237,7 @@
       font-size: clamp(1.05rem, 2.6vw, 1.65rem);
       font-weight: 800;
       line-height: 1.15;
+      min-height: 1.15em;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -197,6 +246,7 @@
     .artist {
       font-size: clamp(0.88rem, 1.8vw, 1.05rem);
       color: rgba(255, 255, 255, 0.86);
+      min-height: 1.05em;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -205,6 +255,7 @@
     .album {
       font-size: 0.8rem;
       color: rgba(255, 255, 255, 0.62);
+      min-height: 0.8em;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -528,11 +579,12 @@
           <p class="hero-sub">Each pick pulls charts from 3 random countries — K-pop, Bollywood, Latin, and more. 30s previews only.</p>
 
           <article class="banner skeleton" id="banner" aria-live="polite">
-            <div class="art-wrap">
-              <img class="art" id="art" alt="" width="160" height="160" />
+            <div class="art-wrap" id="artWrap">
+              <img class="art art-layer is-visible" id="art" alt="" width="160" height="160" decoding="async" />
+              <img class="art art-layer" id="artBack" alt="" width="160" height="160" decoding="async" aria-hidden="true" />
             </div>
 
-            <div class="meta">
+            <div class="meta" id="meta">
               <span class="type-label">Song · Preview</span>
               <h2 class="track" id="track">Loading…</h2>
               <p class="artist" id="artist">Please wait</p>
@@ -641,7 +693,10 @@
     ];
 
     const banner = document.getElementById("banner");
+    const artWrap = document.getElementById("artWrap");
     const art = document.getElementById("art");
+    const artBack = document.getElementById("artBack");
+    const metaEl = document.getElementById("meta");
     const trackEl = document.getElementById("track");
     const artistEl = document.getElementById("artist");
     const albumEl = document.getElementById("album");
@@ -666,6 +721,10 @@
     let rolling = false;
     let reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     let cachedPool = [];
+    let artVisible = art;
+    let artHidden = artBack;
+    let artLoadCache = new Map();
+    let metaTickTimer = null;
 
     greetingEl.textContent = pickGreeting();
 
@@ -729,6 +788,92 @@
         script.src = url + (url.includes("?") ? "&" : "?") + "callback=" + cb;
         document.head.appendChild(script);
       });
+    }
+
+    function artUrl(song, size) {
+      if (!song || !song.artworkUrl100) return "";
+      return song.artworkUrl100.replace("100x100", size + "x" + size);
+    }
+
+    function preloadArt(url) {
+      if (!url) return Promise.reject(new Error("No artwork"));
+      if (artLoadCache.get(url) === true) return Promise.resolve();
+      const pending = artLoadCache.get(url);
+      if (pending && typeof pending.then === "function") return pending;
+
+      const promise = new Promise((resolve, reject) => {
+        const img = new Image();
+        img.decoding = "async";
+        img.onload = () => {
+          artLoadCache.set(url, true);
+          resolve();
+        };
+        img.onerror = () => {
+          artLoadCache.set(url, false);
+          reject(new Error("Art failed"));
+        };
+        img.src = url;
+      });
+
+      artLoadCache.set(url, promise);
+      return promise;
+    }
+
+    function preloadPoolArt(pool) {
+      pool.slice(0, 48).forEach((song) => {
+        const url = artUrl(song, 200);
+        if (url) preloadArt(url).catch(() => {});
+      });
+    }
+
+    function swapBannerArt(url, alt) {
+      if (!url) {
+        artWrap.classList.remove("has-art");
+        return Promise.resolve();
+      }
+
+      return preloadArt(url).then(() => new Promise((resolve) => {
+        artHidden.alt = alt || "";
+        artHidden.src = url;
+
+        const reveal = () => {
+          artHidden.classList.add("is-visible");
+          artVisible.classList.remove("is-visible");
+          const tmp = artVisible;
+          artVisible = artHidden;
+          artHidden = tmp;
+          artWrap.classList.add("has-art");
+          resolve();
+        };
+
+        if (artHidden.complete && artHidden.naturalWidth) reveal();
+        else {
+          artHidden.onload = reveal;
+          artHidden.onerror = () => resolve();
+        }
+      }));
+    }
+
+    function tickFlashMeta() {
+      if (!metaEl) return;
+      metaEl.classList.add("is-ticking");
+      clearTimeout(metaTickTimer);
+      metaTickTimer = setTimeout(() => metaEl.classList.remove("is-ticking"), 90);
+    }
+
+    function setFlashText(song) {
+      trackEl.textContent = song.trackName || "Shuffling…";
+      artistEl.textContent = song.artistName || "";
+      albumEl.textContent = song.collectionName || "";
+      tickFlashMeta();
+    }
+
+    function setBannerArtFromSong(song, size) {
+      const url = artUrl(song, size);
+      const alt = song.trackName
+        ? song.trackName + " by " + song.artistName
+        : "";
+      return swapBannerArt(url, alt);
     }
 
     function parseTrackId(url) {
@@ -869,6 +1014,7 @@
     async function buildSongPool() {
       const { raw, countries } = await fetchChartsRaw();
       cachedPool = diversifyPool(raw, 5);
+      preloadPoolArt(cachedPool);
 
       const enrichedGroups = await Promise.all(
         countries.map((country) => {
@@ -883,6 +1029,7 @@
 
       if (pool.length < 8) throw new Error("Not enough playable songs. Try again.");
       cachedPool = pool;
+      preloadPoolArt(pool);
       return shuffle(pool);
     }
 
@@ -984,26 +1131,29 @@
     }
 
     function renderWarmupFlash() {
-      trackEl.textContent = "Shuffling…";
-      artistEl.textContent = "Pulling charts";
-      albumEl.textContent = "";
-      art.alt = "";
+      setFlashText({ trackName: "Shuffling…", artistName: "Pulling charts", collectionName: "" });
       previewPill.hidden = true;
       linksEl.innerHTML = "";
       setBannerColor(pick(FALLBACK_COLORS));
     }
 
     function renderFlash(song) {
-      trackEl.textContent = song.trackName;
-      artistEl.textContent = song.artistName;
-      albumEl.textContent = song.collectionName || "";
-      art.alt = song.trackName + " by " + song.artistName;
-      art.src = song.artworkUrl100
-        ? song.artworkUrl100.replace("100x100", "300x300")
-        : "";
+      setFlashText(song);
       previewPill.hidden = true;
       linksEl.innerHTML = "";
       setBannerColor(pick(FALLBACK_COLORS));
+
+      const url = artUrl(song, 200);
+      if (!url) return;
+
+      if (artLoadCache.get(url) === true) {
+        setBannerArtFromSong(song, 200).catch(() => {});
+        return;
+      }
+
+      preloadArt(url)
+        .then(() => setBannerArtFromSong(song, 200))
+        .catch(() => {});
     }
 
     function renderSong(song, options) {
@@ -1011,14 +1161,7 @@
       currentSong = song;
       spotifyUrl = spotifySearchUrl(song.trackName, song.artistName);
 
-      trackEl.textContent = song.trackName;
-      artistEl.textContent = song.artistName;
-      albumEl.textContent = song.collectionName || "";
-      art.alt = song.trackName + " by " + song.artistName;
-      art.src = song.artworkUrl100
-        ? song.artworkUrl100.replace("100x100", "600x600")
-        : "";
-
+      setFlashText(song);
       previewPill.hidden = !song.previewUrl;
       updateMiniBar(song);
 
@@ -1038,6 +1181,8 @@
           '<span style="color:var(--text-muted);font-size:0.78rem;font-weight:500;">30s preview here · full track in Spotify app (free OK)</span>';
       }
 
+      setBannerArtFromSong(song, opts.final ? 600 : 200).catch(() => {});
+
       if (!opts.skipAudio) {
         stopPreview();
         audio.src = song.previewUrl || "";
@@ -1045,8 +1190,9 @@
     }
 
     function applyArtColor() {
-      art.onload = () => colorFromImage(art).then(setBannerColor);
-      if (art.complete && art.naturalWidth) colorFromImage(art).then(setBannerColor);
+      const img = artVisible;
+      img.onload = () => colorFromImage(img).then(setBannerColor);
+      if (img.complete && img.naturalWidth) colorFromImage(img).then(setBannerColor);
     }
 
     function autoplayPreview() {
@@ -1090,6 +1236,7 @@
         poolPromise
           .then((pool) => {
             livePool = pool;
+            preloadPoolArt(pool);
           })
           .catch(reject);
 
@@ -1135,6 +1282,7 @@
       statusEl.textContent = "Starting shuffle…";
 
       if (cachedPool.length >= 4) {
+        preloadPoolArt(cachedPool);
         renderFlash(pick(cachedPool));
       } else {
         renderWarmupFlash();
