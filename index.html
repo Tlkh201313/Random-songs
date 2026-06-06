@@ -1072,6 +1072,8 @@
       artSwapToken += 1;
       flashArtQueue = Promise.resolve();
     }
+
+    function parseTrackId(url) {
       if (!url) return null;
       const match = String(url).match(/[?&]i=(\d+)/);
       return match ? match[1] : null;
