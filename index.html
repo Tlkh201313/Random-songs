@@ -166,6 +166,8 @@
       overflow: hidden;
       background: rgba(0, 0, 0, 0.25);
       box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+      contain: layout style paint;
+      transform: translateZ(0);
     }
 
     .art-wrap::after {
@@ -190,16 +192,55 @@
       position: absolute;
       inset: 0;
       opacity: 0;
-      transition: opacity 0.14s ease;
+      transform: scale(1.02);
+      transition: opacity 0.12s ease, transform 0.12s ease;
       z-index: 1;
+      will-change: opacity, transform;
+      backface-visibility: hidden;
     }
 
     .art-layer.is-visible {
       opacity: 1;
+      transform: scale(1);
     }
 
     .banner.flashing .art-layer {
-      transition-duration: 0.1s;
+      transition-duration: 0.08s;
+    }
+
+    .banner.flashing .art-layer.is-pop {
+      animation: art-flash-pop 0.14s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    @keyframes art-flash-pop {
+      0% {
+        opacity: 0.35;
+        transform: scale(1.08);
+      }
+      100% {
+        opacity: 1;
+        transform: scale(1);
+      }
+    }
+
+    .art-wrap.is-loading::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      background: linear-gradient(
+        110deg,
+        rgba(255, 255, 255, 0.04) 25%,
+        rgba(255, 255, 255, 0.14) 50%,
+        rgba(255, 255, 255, 0.04) 75%
+      );
+      background-size: 200% 100%;
+      animation: art-shimmer 0.9s linear infinite;
+    }
+
+    @keyframes art-shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
     }
 
     .banner.flashing .art-wrap:not(.has-art) {
@@ -589,6 +630,15 @@
       .banner.flashing .artist,
       .banner.flashing .album {
         transition: none;
+        animation: none;
+      }
+
+      .banner.flashing .art-layer.is-pop {
+        animation: none;
+      }
+
+      .art-wrap.is-loading::before {
+        animation: none;
       }
 
       .banner.flashing .meta.is-ticking .track,
@@ -760,6 +810,10 @@
     let artHidden = artBack;
     let artLoadCache = new Map();
     let metaTickTimer = null;
+    let artSwapToken = 0;
+    let flashArtQueue = Promise.resolve();
+    const FLASH_ART_SIZE = 100;
+    const FINAL_ART_SIZE = 600;
 
     greetingEl.textContent = pickGreeting();
 
@@ -830,63 +884,143 @@
       return song.artworkUrl100.replace("100x100", size + "x" + size);
     }
 
+    function getArtCacheEntry(url) {
+      const entry = artLoadCache.get(url);
+      if (!entry) return null;
+      if (entry.loaded) return entry;
+      return null;
+    }
+
     function preloadArt(url) {
       if (!url) return Promise.reject(new Error("No artwork"));
-      if (artLoadCache.get(url) === true) return Promise.resolve();
-      const pending = artLoadCache.get(url);
-      if (pending && typeof pending.then === "function") return pending;
+
+      const ready = getArtCacheEntry(url);
+      if (ready) return Promise.resolve(ready.img);
+
+      const entry = artLoadCache.get(url);
+      if (entry && entry.promise) return entry.promise;
 
       const promise = new Promise((resolve, reject) => {
         const img = new Image();
         img.decoding = "async";
-        img.onload = () => {
-          artLoadCache.set(url, true);
-          resolve();
+
+        const finish = async () => {
+          if (img.decode) {
+            try {
+              await img.decode();
+            } catch (_) {}
+          }
+          artLoadCache.set(url, { loaded: true, img: img });
+          resolve(img);
         };
+
+        img.onload = () => finish();
         img.onerror = () => {
-          artLoadCache.set(url, false);
+          artLoadCache.set(url, { loaded: false, img: null });
           reject(new Error("Art failed"));
         };
         img.src = url;
       });
 
-      artLoadCache.set(url, promise);
+      artLoadCache.set(url, { promise: promise });
       return promise;
     }
 
-    function preloadPoolArt(pool) {
-      pool.slice(0, 48).forEach((song) => {
-        const url = artUrl(song, 200);
+    function preloadPoolArt(pool, size) {
+      const px = size || FLASH_ART_SIZE;
+      pool.slice(0, 56).forEach((song) => {
+        const url = artUrl(song, px);
         if (url) preloadArt(url).catch(() => {});
       });
     }
 
-    function swapBannerArt(url, alt) {
+    function preloadPoolArtPriority(pool, count) {
+      const jobs = pool.slice(0, count).map((song) => {
+        const url = artUrl(song, FLASH_ART_SIZE);
+        return url ? preloadArt(url).catch(() => {}) : Promise.resolve();
+      });
+      return Promise.all(jobs);
+    }
+
+    function swapBannerArt(url, alt, options) {
+      const opts = options || {};
+      const token = ++artSwapToken;
+
       if (!url) {
-        artWrap.classList.remove("has-art");
+        artWrap.classList.remove("has-art", "is-loading");
         return Promise.resolve();
       }
 
-      return preloadArt(url).then(() => new Promise((resolve) => {
+      artWrap.classList.add("is-loading");
+
+      return preloadArt(url).then(() => {
+        if (opts.flash && token !== artSwapToken) return;
+
         artHidden.alt = alt || "";
         artHidden.src = url;
 
-        const reveal = () => {
-          artHidden.classList.add("is-visible");
-          artVisible.classList.remove("is-visible");
-          const tmp = artVisible;
-          artVisible = artHidden;
-          artHidden = tmp;
-          artWrap.classList.add("has-art");
-          resolve();
-        };
+        return new Promise((resolve) => {
+          const reveal = async () => {
+            if (opts.flash && token !== artSwapToken) {
+              resolve();
+              return;
+            }
 
-        if (artHidden.complete && artHidden.naturalWidth) reveal();
-        else {
-          artHidden.onload = reveal;
-          artHidden.onerror = () => resolve();
-        }
-      }));
+            if (artHidden.decode) {
+              try {
+                await artHidden.decode();
+              } catch (_) {}
+            }
+
+            artHidden.classList.remove("is-pop");
+            artVisible.classList.remove("is-visible", "is-pop");
+
+            if (opts.flash) {
+              void artHidden.offsetWidth;
+              artHidden.classList.add("is-visible", "is-pop");
+            } else {
+              artHidden.classList.add("is-visible");
+            }
+
+            const tmp = artVisible;
+            artVisible = artHidden;
+            artHidden = tmp;
+
+            artWrap.classList.add("has-art");
+            artWrap.classList.remove("is-loading");
+
+            if (opts.syncColor !== false && !opts.flash) {
+              colorFromImage(artVisible).then(setBannerColor);
+            }
+
+            resolve();
+          };
+
+          if (artHidden.complete && artHidden.naturalWidth) reveal();
+          else {
+            artHidden.onload = reveal;
+            artHidden.onerror = () => {
+              artWrap.classList.remove("is-loading");
+              resolve();
+            };
+          }
+        });
+      }).catch(() => {
+        artWrap.classList.remove("is-loading");
+      });
+    }
+
+    function queueFlashArt(song) {
+      const url = artUrl(song, FLASH_ART_SIZE);
+      if (!url) return;
+
+      flashArtQueue = flashArtQueue.then(() => {
+        if (!rolling) return;
+        const alt = song.trackName
+          ? song.trackName + " by " + song.artistName
+          : "";
+        return swapBannerArt(url, alt, { flash: true, syncColor: false });
+      });
     }
 
     function tickFlashMeta() {
@@ -898,17 +1032,17 @@
 
     function setFlashText(song) {
       trackEl.textContent = song.trackName || "Shuffling…";
-      artistEl.textContent = song.artistName || "";
-      albumEl.textContent = song.collectionName || "";
+      artistEl.textContent = song.artistName || "Unknown artist";
+      albumEl.textContent = song.collectionName || "\u00a0";
       tickFlashMeta();
     }
 
-    function setBannerArtFromSong(song, size) {
+    function setBannerArtFromSong(song, size, flash) {
       const url = artUrl(song, size);
       const alt = song.trackName
         ? song.trackName + " by " + song.artistName
         : "";
-      return swapBannerArt(url, alt);
+      return swapBannerArt(url, alt, { flash: !!flash, syncColor: !flash });
     }
 
     function parseTrackId(url) {
@@ -1049,7 +1183,7 @@
     async function buildSongPool() {
       const { raw, countries } = await fetchChartsRaw();
       cachedPool = diversifyPool(raw, 5);
-      preloadPoolArt(cachedPool);
+      preloadPoolArt(cachedPool, FLASH_ART_SIZE);
 
       const enrichedGroups = await Promise.all(
         countries.map((country) => {
@@ -1064,7 +1198,8 @@
 
       if (pool.length < 8) throw new Error("Not enough playable songs. Try again.");
       cachedPool = pool;
-      preloadPoolArt(pool);
+      preloadPoolArt(pool, FLASH_ART_SIZE);
+      preloadPoolArt(pool, FINAL_ART_SIZE);
       return shuffle(pool);
     }
 
@@ -1176,21 +1311,24 @@
 
     function renderFlash(song) {
       setFlashText(song);
-      previewPill.hidden = true;
-      linksEl.innerHTML = "";
-      setBannerColor(pick(FALLBACK_COLORS));
 
-      const url = artUrl(song, 200);
-      if (!url) return;
-
-      if (artLoadCache.get(url) === true) {
-        setBannerArtFromSong(song, 200).catch(() => {});
-        return;
+      const typeLabel = document.querySelector(".type-label");
+      if (typeLabel) {
+        typeLabel.textContent = "Shuffling · " + (song.trackName || "…");
       }
 
-      preloadArt(url)
-        .then(() => setBannerArtFromSong(song, 200))
-        .catch(() => {});
+      previewPill.hidden = true;
+      linksEl.innerHTML = "";
+
+      if (getArtCacheEntry(artUrl(song, FLASH_ART_SIZE))) {
+        queueFlashArt(song);
+      } else {
+        preloadArt(artUrl(song, FLASH_ART_SIZE))
+          .then(() => {
+            if (rolling) queueFlashArt(song);
+          })
+          .catch(() => {});
+      }
     }
 
     function renderSong(song, options) {
@@ -1218,7 +1356,7 @@
           '<span style="color:var(--text-muted);font-size:0.78rem;font-weight:500;">30s preview here · full track in Spotify app (free OK)</span>';
       }
 
-      setBannerArtFromSong(song, opts.final ? 600 : 200).catch(() => {});
+      setBannerArtFromSong(song, opts.final ? FINAL_ART_SIZE : FLASH_ART_SIZE, false).catch(() => {});
 
       if (!opts.skipAudio) {
         stopPreview();
@@ -1273,7 +1411,8 @@
         poolPromise
           .then((pool) => {
             livePool = pool;
-            preloadPoolArt(pool);
+            preloadPoolArt(pool, FLASH_ART_SIZE);
+            preloadPoolArtPriority(pool, 18);
           })
           .catch(reject);
 
@@ -1313,13 +1452,15 @@
 
       clearFlashTimer();
       stopPreview();
+      artSwapToken += 1;
+      flashArtQueue = Promise.resolve();
       banner.classList.remove("landed", "skeleton");
       setRolling(true);
       linksEl.innerHTML = "";
       statusEl.textContent = "Starting shuffle…";
 
       if (cachedPool.length >= 4) {
-        preloadPoolArt(cachedPool);
+        preloadPoolArt(cachedPool, FLASH_ART_SIZE);
         renderFlash(pick(cachedPool));
       } else {
         renderWarmupFlash();
