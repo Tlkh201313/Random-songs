@@ -221,7 +221,7 @@
 
     .banner.flashing .meta.is-ticking .track,
     .banner.flashing .meta.is-ticking .artist {
-      opacity: 0.72;
+      opacity: 0.88;
       transform: translateY(1px);
     }
 
@@ -483,6 +483,29 @@
     .skeleton .artist { height: 1rem; width: min(45%, 240px); }
     .skeleton .album { height: 0.85rem; width: min(38%, 200px); }
 
+    .banner.flashing .track,
+    .banner.flashing .artist,
+    .banner.flashing .album {
+      background: none !important;
+      color: inherit;
+      animation: none;
+      width: auto;
+      max-width: 100%;
+    }
+
+    .banner.flashing .track {
+      color: #fff;
+      text-shadow: 0 1px 10px rgba(0, 0, 0, 0.35);
+    }
+
+    .banner.flashing .artist {
+      color: rgba(255, 255, 255, 0.92);
+    }
+
+    .banner.flashing .album {
+      color: rgba(255, 255, 255, 0.72);
+    }
+
     @keyframes pulse {
       0%, 100% { opacity: 0.55; }
       50% { opacity: 1; }
@@ -558,6 +581,18 @@
       }
 
       .banner.flashing {
+        transform: none;
+      }
+
+      .art-layer,
+      .banner.flashing .track,
+      .banner.flashing .artist,
+      .banner.flashing .album {
+        transition: none;
+      }
+
+      .banner.flashing .meta.is-ticking .track,
+      .banner.flashing .meta.is-ticking .artist {
         transform: none;
       }
     }
@@ -1041,8 +1076,10 @@
       rolling = isRolling;
       pickBtn.disabled = isRolling;
       pickBtn.textContent = isRolling ? "Shuffling…" : "Pick a song";
-      banner.classList.toggle("skeleton", isRolling && !banner.classList.contains("flashing"));
       banner.classList.toggle("flashing", isRolling);
+      if (isRolling) {
+        banner.classList.remove("skeleton");
+      }
     }
 
     function clearFlashTimer() {
