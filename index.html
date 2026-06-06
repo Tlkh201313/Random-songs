@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Spotify Random Picker</title>
+  <title>Random Song Picker</title>
+  <meta name="description" content="Pick a random song from global charts with 30-second previews. Not affiliated with Spotify or Apple." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -16,8 +17,8 @@
       --text: #ffffff;
       --text-sub: #b3b3b3;
       --text-muted: #727272;
-      --green: #1db954;
-      --green-hover: #1ed760;
+      --green: #10b981;
+      --green-hover: #34d399;
       --line: rgba(255, 255, 255, 0.1);
     }
 
@@ -506,8 +507,12 @@
       padding: 0.45rem 0.85rem;
     }
 
-    .links a:hover {
-      background: var(--bg-card-hover);
+    .legal-note {
+      margin-top: 1rem;
+      font-size: 0.72rem;
+      line-height: 1.45;
+      color: var(--text-muted);
+      max-width: 62ch;
     }
 
     .skeleton .art,
@@ -652,8 +657,8 @@
   <div class="shell">
     <header class="topbar">
       <div class="brand">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
-        Random Picker
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.59 9.17 5.41 4 4 5.41l5.17 5.17 1.42-1.41zm3.91-5.17L16.54 6l-12.55 12.55L5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg>
+        Random Song Picker
       </div>
     </header>
 
@@ -678,8 +683,8 @@
             </div>
 
             <div class="actions">
-              <button type="button" class="icon-btn" id="openBtn" title="Open in Spotify" aria-label="Open in Spotify">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
+              <button type="button" class="icon-btn" id="openBtn" title="Search for this song online" aria-label="Search for this song online">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
               </button>
               <button type="button" class="play-btn" id="playBtn" title="Play preview" aria-label="Play preview">
                 <svg id="playIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
@@ -704,6 +709,7 @@
 
             <p class="status" id="status"></p>
             <div class="links" id="links"></div>
+            <p class="legal-note">Not affiliated with Spotify or Apple. Chart data and 30s previews come from public iTunes APIs. Album art, audio, and names belong to artists and rights holders.</p>
           </div>
         </div>
       </section>
@@ -713,7 +719,7 @@
       <img class="mini-art" id="miniArt" alt="" width="44" height="44" />
       <div class="mini-meta">
         <p class="mini-track" id="miniTrack">Nothing playing</p>
-        <p class="mini-artist" id="miniArtist">Hit Pick a song · 30s previews (no Premium needed)</p>
+        <p class="mini-artist" id="miniArtist">Hit Pick a song · 30s chart previews</p>
       </div>
     </footer>
   </div>
@@ -801,7 +807,7 @@
     const greetingEl = document.getElementById("greeting");
 
     let currentSong = null;
-    let spotifyUrl = "https://open.spotify.com/";
+    let listenUrl = "https://open.spotify.com/";
     let flashTimer = null;
     let rolling = false;
     let reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -820,12 +826,29 @@
 
     greetingEl.textContent = pickGreeting();
 
-    const savedAuto = localStorage.getItem("spotify-picker-auto-shuffle");
+    const savedAuto =
+      localStorage.getItem("random-picker-auto-shuffle") ||
+      localStorage.getItem("spotify-picker-auto-shuffle");
     if (savedAuto === "1") autoShuffleEl.checked = true;
 
     autoShuffleEl.addEventListener("change", () => {
-      localStorage.setItem("spotify-picker-auto-shuffle", autoShuffleEl.checked ? "1" : "0");
+      localStorage.setItem("random-picker-auto-shuffle", autoShuffleEl.checked ? "1" : "0");
     });
+
+    function safeHttpUrl(url) {
+      if (!url) return null;
+      try {
+        const parsed = new URL(String(url));
+        if (parsed.protocol === "https:" || parsed.protocol === "http:") {
+          return parsed.href;
+        }
+      } catch (_) {}
+      return null;
+    }
+
+    function externalSearchUrl(track, artist) {
+      return "https://open.spotify.com/search/" + encodeURIComponent(track + " " + artist);
+    }
 
     function pick(arr) {
       return arr[Math.floor(Math.random() * arr.length)];
@@ -1232,7 +1255,7 @@
     }
 
     function spotifySearchUrl(track, artist) {
-      return "https://open.spotify.com/search/" + encodeURIComponent(track + " " + artist);
+      return externalSearchUrl(track, artist);
     }
 
     function setRolling(isRolling) {
@@ -1273,7 +1296,7 @@
     function updateMiniBar(song) {
       if (!song) {
         miniTrack.textContent = "Nothing playing";
-        miniArtist.textContent = "Hit Pick a song · 30s previews (full song via Spotify link)";
+        miniArtist.textContent = "Hit Pick a song · 30s chart previews";
         miniArt.removeAttribute("src");
         return;
       }
@@ -1363,7 +1386,7 @@
     function renderSong(song, options) {
       const opts = options || {};
       currentSong = song;
-      spotifyUrl = spotifySearchUrl(song.trackName, song.artistName);
+      listenUrl = externalSearchUrl(song.trackName, song.artistName);
 
       setFlashText(song);
       previewPill.hidden = !song.previewUrl;
@@ -1377,12 +1400,13 @@
       }
 
       if (opts.final) {
+        const appleUrl = safeHttpUrl(song.trackViewUrl);
         linksEl.innerHTML =
-          '<a href="' + spotifyUrl + '" target="_blank" rel="noopener noreferrer">Open full song in Spotify</a>' +
-          (song.trackViewUrl
-            ? '<a href="' + song.trackViewUrl + '" target="_blank" rel="noopener noreferrer">Apple Music</a>'
+          '<a href="' + listenUrl + '" target="_blank" rel="noopener noreferrer nofollow">Search on Spotify</a>' +
+          (appleUrl
+            ? '<a href="' + appleUrl + '" target="_blank" rel="noopener noreferrer nofollow">Apple Music</a>'
             : "") +
-          '<span style="color:var(--text-muted);font-size:0.78rem;font-weight:500;">30s preview here · full track in Spotify app (free OK)</span>';
+          '<span style="color:var(--text-muted);font-size:0.78rem;font-weight:500;">30s preview only · open links for full tracks</span>';
       }
 
       setBannerArtFromSong(song, opts.final ? FINAL_ART_SIZE : FLASH_ART_SIZE, false).catch(() => {});
@@ -1406,7 +1430,7 @@
       audio.play()
         .then(() => {
           setPlayIcon(true);
-          statusEl.textContent = "Preview playing. Full track on Spotify.";
+          statusEl.textContent = "Preview playing. Use links below for the full track.";
         })
         .catch(() => {
           statusEl.textContent = "Tap the green play button if autoplay is blocked.";
@@ -1524,13 +1548,13 @@
 
     playBtn.addEventListener("click", () => {
       if (!currentSong || !currentSong.previewUrl) {
-        window.open(spotifyUrl, "_blank", "noopener,noreferrer");
+        window.open(listenUrl, "_blank", "noopener,noreferrer");
         return;
       }
 
       if (audio.paused) {
         audio.play().then(() => setPlayIcon(true)).catch(() => {
-          statusEl.textContent = "Preview blocked. Open in Spotify instead.";
+          statusEl.textContent = "Preview blocked. Tap play or use search link.";
         });
       } else {
         stopPreview();
@@ -1538,7 +1562,7 @@
     });
 
     openBtn.addEventListener("click", () => {
-      window.open(spotifyUrl, "_blank", "noopener,noreferrer");
+      window.open(listenUrl, "_blank", "noopener,noreferrer");
     });
 
     audio.addEventListener("timeupdate", () => {
