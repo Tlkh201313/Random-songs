@@ -812,6 +812,9 @@
     let metaTickTimer = null;
     let artSwapToken = 0;
     let flashArtQueue = Promise.resolve();
+    let rollGeneration = 0;
+    let lastFlashSong = null;
+    let previewSession = 0;
     const FLASH_ART_SIZE = 100;
     const FINAL_ART_SIZE = 600;
 
@@ -1045,7 +1048,30 @@
       return swapBannerArt(url, alt, { flash: !!flash, syncColor: !flash });
     }
 
-    function parseTrackId(url) {
+    function songKey(song) {
+      if (!song) return "";
+      if (song.trackId) return String(song.trackId);
+      return String(song.trackName || "") + "|" + String(song.artistName || "");
+    }
+
+    function resolveFinalSong(pool, flashedSong) {
+      const previewPool = pool.filter((s) => s.previewUrl);
+      const fallback = previewPool.length ? previewPool : pool;
+      if (!flashedSong || !fallback.length) return pick(fallback);
+
+      const key = songKey(flashedSong);
+      const enriched = pool.find((s) => songKey(s) === key);
+      if (enriched && enriched.previewUrl) return enriched;
+      if (enriched) return enriched;
+      if (flashedSong.previewUrl) return flashedSong;
+      return pick(fallback);
+    }
+
+    function cancelFlashEffects() {
+      clearFlashTimer();
+      artSwapToken += 1;
+      flashArtQueue = Promise.resolve();
+    }
       if (!url) return null;
       const match = String(url).match(/[?&]i=(\d+)/);
       return match ? match[1] : null;
@@ -1310,6 +1336,7 @@
     }
 
     function renderFlash(song) {
+      lastFlashSong = song;
       setFlashText(song);
 
       const typeLabel = document.querySelector(".type-label");
@@ -1385,9 +1412,12 @@
     }
 
     function finishRoll(finalSong, flipCount) {
+      cancelFlashEffects();
       banner.classList.remove("flashing", "skeleton");
       banner.classList.add("landed");
       setRolling(false);
+
+      if (!finalSong) return;
 
       renderSong(finalSong, { final: true, skipAudio: true });
       applyArtColor();
@@ -1401,7 +1431,7 @@
       setTimeout(() => banner.classList.remove("landed"), 500);
     }
 
-    function flashThroughPool(poolPromise) {
+    function flashThroughPool(poolPromise, rollId) {
       return new Promise((resolve, reject) => {
         let livePool = cachedPool.length >= 4 ? cachedPool : [];
         let totalFlips = reduceMotion ? 1 : 30 + Math.floor(Math.random() * 18);
@@ -1410,6 +1440,7 @@
 
         poolPromise
           .then((pool) => {
+            if (rollId !== rollGeneration) return;
             livePool = pool;
             preloadPoolArt(pool, FLASH_ART_SIZE);
             preloadPoolArtPriority(pool, 18);
@@ -1417,11 +1448,14 @@
           .catch(reject);
 
         function step() {
+          if (rollId !== rollGeneration) return;
+
           if (flipCount >= totalFlips) {
+            clearFlashTimer();
             poolPromise
               .then((pool) => {
-                const previewPool = pool.filter((s) => s.previewUrl);
-                finishRoll(pick(previewPool.length ? previewPool : pool), flipCount);
+                if (rollId !== rollGeneration) return;
+                finishRoll(resolveFinalSong(pool, lastFlashSong), flipCount);
                 resolve();
               })
               .catch(reject);
@@ -1450,10 +1484,13 @@
     function rollSong() {
       if (rolling) return;
 
-      clearFlashTimer();
+      rollGeneration += 1;
+      const rollId = rollGeneration;
+      previewSession += 1;
+      lastFlashSong = null;
+
+      cancelFlashEffects();
       stopPreview();
-      artSwapToken += 1;
-      flashArtQueue = Promise.resolve();
       banner.classList.remove("landed", "skeleton");
       setRolling(true);
       linksEl.innerHTML = "";
@@ -1468,8 +1505,9 @@
 
       const poolPromise = buildSongPool();
 
-      flashThroughPool(poolPromise).catch((err) => {
-        clearFlashTimer();
+      flashThroughPool(poolPromise, rollId).catch((err) => {
+        if (rollId !== rollGeneration) return;
+        cancelFlashEffects();
         banner.classList.remove("flashing", "skeleton", "landed");
         setRolling(false);
         trackEl.textContent = "Could not load songs";
@@ -1510,10 +1548,15 @@
       setPlayIcon(false);
       progressBar.style.width = "0%";
 
-      if (autoShuffleEl.checked && !rolling) {
-        statusEl.textContent = "Preview ended. Auto shuffling…";
-        rollSong();
-      }
+      if (!autoShuffleEl.checked || rolling) return;
+
+      const endedSession = previewSession;
+      setTimeout(() => {
+        if (autoShuffleEl.checked && !rolling && endedSession === previewSession) {
+          statusEl.textContent = "Preview ended. Auto shuffling…";
+          rollSong();
+        }
+      }, 250);
     });
 
     updateMiniBar(null);
